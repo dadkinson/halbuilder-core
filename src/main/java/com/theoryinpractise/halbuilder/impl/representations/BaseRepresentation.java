@@ -2,6 +2,7 @@ package com.theoryinpractise.halbuilder.impl.representations;
 
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ArrayListMultimap;
@@ -15,28 +16,30 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
 import com.google.common.collect.Table;
-import com.theoryinpractise.halbuilder.api.Contract;
-import com.theoryinpractise.halbuilder.api.Link;
-import com.theoryinpractise.halbuilder.api.ReadableRepresentation;
-import com.theoryinpractise.halbuilder.api.Renderer;
-import com.theoryinpractise.halbuilder.api.RepresentationException;
-import com.theoryinpractise.halbuilder.api.RepresentationFactory;
+import com.theoryinpractise.halbuilder.RepresentationFactory;
 import com.theoryinpractise.halbuilder.impl.api.Support;
 import com.theoryinpractise.halbuilder.impl.bytecode.InterfaceContract;
 import com.theoryinpractise.halbuilder.impl.bytecode.InterfaceRenderer;
+import com.theoryinpractise.halbuilder.spi.Contract;
+import com.theoryinpractise.halbuilder.spi.Link;
+import com.theoryinpractise.halbuilder.spi.ReadableRepresentation;
+import com.theoryinpractise.halbuilder.spi.Renderer;
+import com.theoryinpractise.halbuilder.spi.Representation;
+import com.theoryinpractise.halbuilder.spi.RepresentationException;
 
 import javax.annotation.Nullable;
 import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static com.google.common.base.Optional.fromNullable;
 import static com.google.common.base.Strings.emptyToNull;
 import static com.google.common.collect.Iterables.transform;
 import static com.google.common.collect.Ordering.usingToString;
@@ -55,7 +58,7 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
 
     protected Map<String, String> namespaces = Maps.newTreeMap(usingToString());
     protected List<Link> links = Lists.newArrayList();
-    protected Map<String, Object> properties = Maps.newTreeMap(usingToString());
+    protected Map<String, Optional<Object>> properties = Maps.newTreeMap(usingToString());
     protected Multimap<String,ReadableRepresentation> resources = ArrayListMultimap.create();
 
     protected RepresentationFactory representationFactory;
@@ -66,8 +69,8 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
         this.representationFactory = representationFactory;
     }
 
-    public Link getResourceLink() {
-        return Iterables.find(getLinks(), LinkPredicate.newLinkPredicate(Support.SELF), null);
+    public Optional<Link> getResourceLink() {
+        return Iterables.tryFind(getLinks(), LinkPredicate.newLinkPredicate(Support.SELF));
     }
 
     public Map<String, String> getNamespaces() {
@@ -78,8 +81,8 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
         return ImmutableList.copyOf(links);
     }
 
-    public Link getLinkByRel(String rel) {
-        return Iterables.getFirst(getLinksByRel(rel), null);
+    public Optional<Link> getLinkByRel(String rel) {
+        return fromNullable(Iterables.getFirst(getLinksByRel(rel), null));
     }
 
     public List<Link> getLinksByRel(final String rel) {
@@ -110,18 +113,23 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
         return ImmutableList.copyOf(Iterables.filter(resources.values(), predicate));
     }
 
-    public Object getValue(String name) {
+    public Optional<Object> get(String name) {
         if (properties.containsKey(name)) {
             return properties.get(name);
         } else {
-            throw new RepresentationException("Resource does not contain " + name);
+            return Optional.absent();
         }
     }
 
+    public Object getValue(String name) {
+        return getValue(name, null);
+    }
+
     public Object getValue(String name, Object defaultValue) {
-        try {
-            return getValue(name);
-        } catch (RepresentationException e) {
+        Optional<Object> property = get(name);
+        if (property.isPresent()) {
+            return property.get();
+        } else {
             return defaultValue;
         }
     }
@@ -162,19 +170,19 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
 
             String titles = joiner.join(ordering.sortedCopy(transform(hrefLinks, new Function<Link, Object>() {
                 public Object apply(@Nullable Link link) {
-                    return link.getTitle();
+                    return link.getTitle().orNull();
                 }
             })));
 
             String names = joiner.join(ordering.sortedCopy(transform(hrefLinks, new Function<Link, Object>() {
                 public Object apply(@Nullable Link link) {
-                    return link.getName();
+                    return link.getName().orNull();
                 }
             })));
 
             String hreflangs = joiner.join(ordering.sortedCopy(transform(hrefLinks, new Function<Link, Object>() {
                 public Object apply(@Nullable Link link) {
-                    return link.getHreflang();
+                    return link.getHreflang().orNull();
                 }
             })));
 
@@ -182,9 +190,9 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
             String curiedHref = currieHref(href);
 
             collatedLinks.add(new Link(representationFactory, curiedHref, rels,
-                                              emptyToNull(names),
-                                              emptyToNull(titles),
-                                              emptyToNull(hreflangs)));
+                                              fromNullable(emptyToNull(names)),
+                                              fromNullable(emptyToNull(titles)),
+                                              fromNullable(emptyToNull(hreflangs))));
         }
 
         return RELATABLE_ORDERING.sortedCopy(collatedLinks);
@@ -201,23 +209,19 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
         return href;
     }
 
-    public Map<String, Object> getProperties() {
-        return Collections.unmodifiableMap(properties);
+    public Map<String, Optional<Object>> getProperties() {
+        return ImmutableMap.copyOf(properties);
     }
 
-    public Collection<Map.Entry<String, ReadableRepresentation>> getResources() {
-        return ImmutableMultimap.copyOf(resources).entries();
-    }
-
-    public Map<String, Collection<ReadableRepresentation>> getResourceMap() {
-        return ImmutableMap.copyOf(resources.asMap());
+    public Multimap<String, ReadableRepresentation> getResources() {
+        return ImmutableMultimap.copyOf(resources);
     }
 
     protected  void validateNamespaces(ReadableRepresentation representation) {
         for (Link link : representation.getCanonicalLinks()) {
             validateNamespaces(link.getRel());
         }
-        for (Map.Entry<String, ReadableRepresentation> aResource : representation.getResources()) {
+        for (Map.Entry<String, ReadableRepresentation> aResource : representation.getResources().entries()) {
             validateNamespaces(aResource.getKey());
             validateNamespaces(aResource.getValue());
         }
@@ -237,16 +241,26 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
     /**
      * Test whether the Representation in its current state satisfies the provided interface.
      *
-     * @param contract The interface we wish to check
-     * @return Is that Representation satisfied by the supplied contract?
+     * @param anInterface The interface we wish to check
+     * @return Is that Representation structurally like the interface?
      */
     public boolean isSatisfiedBy(Contract contract) {
         return contract.isSatisfiedBy(this);
     }
 
+    public <T, V> Optional<V> ifSatisfiedBy(Class<T> anInterface, Function<T, V> function) {
+        if (InterfaceContract.newInterfaceContract(anInterface).isSatisfiedBy(this)) {
+            Optional<T> proxy = InterfaceRenderer.newInterfaceRenderer(anInterface).render(this, null);
+            if (proxy.isPresent()) {
+                return Optional.of(function.apply(proxy.get()));
+            }
+        }
+        return Optional.absent();
+    }
+
     public String resolveRelativeHref(String href) {
-        if (getResourceLink() != null) {
-            return resolveRelativeHref(getResourceLink().getHref(), href);
+        if (getResourceLink().isPresent()) {
+            return resolveRelativeHref(getResourceLink().get().getHref(), href);
         } else {
             throw new IllegalStateException("Unable to resolve relative href with missing resource href.");
         }
@@ -287,17 +301,21 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
      * @param anInterface The interface we wish to proxy the resource as
      * @return A Guava Optional of the rendered class, this will be absent if the interface doesn't satisfy the interface
      */
-    public <T> T toClass(Class<T> anInterface) {
+    public <T> Optional<T> renderClass(Class<T> anInterface) {
         if (InterfaceContract.newInterfaceContract(anInterface).isSatisfiedBy(this)) {
-            return InterfaceRenderer.newInterfaceRenderer(anInterface).render(this);
+            return InterfaceRenderer.newInterfaceRenderer(anInterface).render(this, null);
         } else {
-            throw new RepresentationException("Unable to render representation to " + anInterface.getName());
+            return Optional.absent();
         }
     }
 
     public String renderContent(String contentType) {
         Renderer<String> renderer = representationFactory.lookupRenderer(contentType);
         return renderAsString(renderer);
+    }
+
+    public <T> Optional<T> resolveClass(Function<ReadableRepresentation, Optional<T>> resolver) {
+        return resolver.apply(this);
     }
 
     private String renderAsString(final Renderer renderer) {
@@ -337,9 +355,9 @@ public abstract class BaseRepresentation implements ReadableRepresentation {
 
     @Override
     public String toString() {
-        Link href = getLinkByRel("self");
-        if (href != null) {
-            return "<Representation: " + href.getHref() + ">";
+        Optional<Link> href = getLinkByRel("self");
+        if (href.isPresent()) {
+            return "<Representation: " + href.get().getHref() + ">";
         } else {
             return "<Representation: @" +  Integer.toHexString(hashCode()) + ">";
         }

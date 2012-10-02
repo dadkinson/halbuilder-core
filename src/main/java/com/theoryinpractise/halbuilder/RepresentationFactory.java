@@ -1,14 +1,10 @@
 package com.theoryinpractise.halbuilder;
 
+import com.google.common.base.Optional;
+import com.google.common.base.Predicate;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Ordering;
-import com.theoryinpractise.halbuilder.api.Link;
-import com.theoryinpractise.halbuilder.api.ReadableRepresentation;
-import com.theoryinpractise.halbuilder.api.Renderer;
-import com.theoryinpractise.halbuilder.api.Representation;
-import com.theoryinpractise.halbuilder.api.RepresentationException;
-import com.theoryinpractise.halbuilder.api.RepresentationFactory;
 import com.theoryinpractise.halbuilder.impl.ContentType;
 import com.theoryinpractise.halbuilder.impl.api.RepresentationReader;
 import com.theoryinpractise.halbuilder.impl.json.JsonRenderer;
@@ -16,6 +12,7 @@ import com.theoryinpractise.halbuilder.impl.json.JsonRepresentationReader;
 import com.theoryinpractise.halbuilder.impl.representations.MutableRepresentation;
 import com.theoryinpractise.halbuilder.impl.xml.XmlRenderer;
 import com.theoryinpractise.halbuilder.impl.xml.XmlRepresentationReader;
+import com.theoryinpractise.halbuilder.spi.*;
 
 import java.io.BufferedReader;
 import java.io.Reader;
@@ -27,7 +24,9 @@ import java.util.TreeMap;
 
 import static java.lang.String.format;
 
-public class DefaultRepresentationFactory implements RepresentationFactory {
+public class RepresentationFactory {
+    public static final String HAL_XML = "application/hal+xml";
+    public static final String HAL_JSON = "application/hal+json";
 
     private Map<ContentType, Class<? extends Renderer>> contentRenderers = Maps.newHashMap();
     private Map<ContentType, Class<? extends RepresentationReader>> representationReaders = Maps.newHashMap();
@@ -35,15 +34,15 @@ public class DefaultRepresentationFactory implements RepresentationFactory {
     private List<Link> links = Lists.newArrayList();
     private String baseHref;
 
-    public DefaultRepresentationFactory() {
+    public RepresentationFactory() {
         this("http://localhost");
     }
 
-    public DefaultRepresentationFactory(URI baseUri) {
+    public RepresentationFactory(URI baseUri) {
         this(baseUri.toASCIIString());
     }
 
-    public DefaultRepresentationFactory(String baseHref) {
+    public RepresentationFactory(String baseHref) {
         this.baseHref = baseHref;
         this.contentRenderers.put(new ContentType(HAL_XML), XmlRenderer.class);
         this.contentRenderers.put(new ContentType(HAL_JSON), JsonRenderer.class);
@@ -51,23 +50,21 @@ public class DefaultRepresentationFactory implements RepresentationFactory {
         this.representationReaders.put(new ContentType(HAL_JSON), JsonRepresentationReader.class);
     }
 
-    @Override
     public String getBaseHref() {
         return baseHref;
     }
 
-    public DefaultRepresentationFactory withRenderer(String contentType, Class<? extends Renderer<String>> rendererClass) {
+    public RepresentationFactory withRenderer(String contentType, Class<? extends Renderer<String>> rendererClass) {
         contentRenderers.put(new ContentType(contentType), rendererClass);
         return this;
     }
 
-    public DefaultRepresentationFactory withReader(String contentType, Class<? extends RepresentationReader> readerClass) {
+    public RepresentationFactory withReader(String contentType, Class<? extends RepresentationReader> readerClass) {
         representationReaders.put(new ContentType(contentType), readerClass);
         return this;
     }
 
-    @Override
-    public DefaultRepresentationFactory withNamespace(String namespace, String url) {
+    public RepresentationFactory withNamespace(String namespace, String url) {
         if (namespaces.containsKey(namespace)) {
             throw new RepresentationException(format("Duplicate namespace '%s' found for representation factory", namespace));
         }
@@ -75,23 +72,19 @@ public class DefaultRepresentationFactory implements RepresentationFactory {
         return this;
     }
 
-    @Override
-    public DefaultRepresentationFactory withLink(String url, String rel) {
+    public RepresentationFactory withLink(String url, String rel) {
         links.add(new Link(this, url, rel));
         return this;
     }
 
-    @Override
     public Representation newRepresentation(URI uri) {
         return newRepresentation(uri.toASCIIString());
     }
 
-    @Override
     public Representation newRepresentation() {
         return newRepresentation((String) null);
     }
 
-    @Override
     public Representation newRepresentation(String href) {
         MutableRepresentation representation = new MutableRepresentation(this, href);
 
@@ -102,13 +95,13 @@ public class DefaultRepresentationFactory implements RepresentationFactory {
 
         // Add factory standard links
         for (Link link : links) {
-            representation.withLink(link.getRel(), link.getHref(), link.getName(), link.getTitle(), link.getHreflang());
+            representation.withLink(link.getRel(), link.getHref(),
+                    Optional.<Predicate<ReadableRepresentation>>absent(), link.getName(), link.getTitle(), link.getHreflang());
         }
 
         return representation;
     }
 
-    @Override
     public ReadableRepresentation readRepresentation(Reader reader) {
         try {
             Reader bufferedReader = new BufferedReader(reader);

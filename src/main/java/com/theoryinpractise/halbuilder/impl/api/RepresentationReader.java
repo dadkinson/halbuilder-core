@@ -1,6 +1,6 @@
 package com.theoryinpractise.halbuilder.impl.api;
 
-import com.theoryinpractise.halbuilder.api.ReadableRepresentation;
+import com.theoryinpractise.halbuilder.spi.ReadableRepresentation;
 
 import java.io.Reader;
 

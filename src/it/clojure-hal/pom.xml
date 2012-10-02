@@ -33,7 +33,7 @@
         </dependency>
         <dependency>
             <groupId>com.theoryinpractise</groupId>
-            <artifactId>halbuilder-core</artifactId>
+            <artifactId>halbuilder</artifactId>
             <version>@project.version@</version>
         </dependency>
     </dependencies>

@@ -1,15 +1,14 @@
 package com.theoryinpractise.halbuilder;
 
-import com.theoryinpractise.halbuilder.api.Link;
-import com.theoryinpractise.halbuilder.api.Representation;
-import com.theoryinpractise.halbuilder.api.RepresentationFactory;
+import com.theoryinpractise.halbuilder.spi.Link;
+import com.theoryinpractise.halbuilder.spi.Representation;
 import org.testng.annotations.Test;
 
 import static org.fest.assertions.api.Assertions.assertThat;
 
 public class CurrieOptimizationTest {
 
-    RepresentationFactory representationFactory = new DefaultRepresentationFactory().withNamespace("app", "/api/applications/")
+    RepresentationFactory representationFactory = new RepresentationFactory().withNamespace("app", "/api/applications/")
             .withNamespace("rel", "/api/rels/");
 
     Representation resource = representationFactory.newRepresentation("/api/1")

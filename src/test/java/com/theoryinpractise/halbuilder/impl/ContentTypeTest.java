@@ -1,7 +1,5 @@
-package com.theoryinpractise.halbuilder;
+package com.theoryinpractise.halbuilder.impl;
 
-import com.theoryinpractise.halbuilder.impl.ContentType;
-import org.fest.assertions.api.Assertions;
 import org.testng.annotations.Test;
 
 import static org.fest.assertions.api.Assertions.assertThat;
@@ -10,7 +8,7 @@ public class ContentTypeTest {
 
     @Test
     public void testContentTypeCreation() {
-        Assertions.assertThat(new ContentType("application/xml").getType()).isEqualTo("application");
+        assertThat(new ContentType("application/xml").getType()).isEqualTo("application");
         assertThat(new ContentType("application/xml").getSubType()).isEqualTo("xml");
     }
 
